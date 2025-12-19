@@ -1,10 +1,11 @@
-package main
+package outputs
 
 import (
 	"fmt"
 	"strconv"
 
 	"github.com/muesli/coral"
+	"github.com/muesli/obs-cli/internal/client"
 )
 
 var (
@@ -46,30 +47,43 @@ var (
 			return replayBufferStatus()
 		},
 	}
+
+	toggleReplayBufferCmd = &coral.Command{
+		Use:   "toggle",
+		Short: "Toggle replay buffer",
+		RunE: func(cmd *coral.Command, args []string) error {
+			return toggleReplayBuffer()
+		},
+	}
 )
 
 func startReplayBuffer() error {
-	_, err := client.ReplayBuffer.StartReplayBuffer()
+	_, err := client.Client.Outputs.StartReplayBuffer()
 	return err
 }
 
 func stopReplayBuffer() error {
-	_, err := client.ReplayBuffer.StopReplayBuffer()
+	_, err := client.Client.Outputs.StopReplayBuffer()
 	return err
 }
 
 func saveReplayBuffer() error {
-	_, err := client.ReplayBuffer.SaveReplayBuffer()
+	_, err := client.Client.Outputs.SaveReplayBuffer()
+	return err
+}
+
+func toggleReplayBuffer() error {
+	_, err := client.Client.Outputs.ToggleReplayBuffer()
 	return err
 }
 
 func replayBufferStatus() error {
-	r, err := client.ReplayBuffer.GetReplayBufferStatus()
+	r, err := client.Client.Outputs.GetReplayBufferStatus()
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Replay Buffer active: %s\n", strconv.FormatBool(r.IsReplayBufferActive))
+	fmt.Printf("Replay Buffer active: %s\n", strconv.FormatBool(r.OutputActive))
 	return nil
 }
 
@@ -77,7 +91,11 @@ func init() {
 	replayBufferCmd.AddCommand(startReplayBufferCmd)
 	replayBufferCmd.AddCommand(stopReplayBufferCmd)
 	replayBufferCmd.AddCommand(saveReplayBufferCmd)
+	replayBufferCmd.AddCommand(toggleReplayBufferCmd)
 	replayBufferCmd.AddCommand(replayBufferStatusCmd)
+}
 
-	rootCmd.AddCommand(replayBufferCmd)
+// RegisterReplayBufferCommands adds all replay buffer commands to the given parent command
+func RegisterReplayBufferCommands(parent *coral.Command) {
+	parent.AddCommand(replayBufferCmd)
 }

@@ -1,10 +1,11 @@
-package main
+package outputs
 
 import (
 	"fmt"
 	"strconv"
 
 	"github.com/muesli/coral"
+	"github.com/muesli/obs-cli/internal/client"
 )
 
 var (
@@ -19,7 +20,7 @@ var (
 		Use:   "toggle",
 		Short: "Toggle virtual camera status",
 		RunE: func(cmd *coral.Command, args []string) error {
-			return starStopVirtualCam()
+			return toggleVirtualCam()
 		},
 	}
 
@@ -48,33 +49,28 @@ var (
 	}
 )
 
-func starStopVirtualCam() error {
-	_, err := client.VirtualCam.StartStopVirtualCam()
+func toggleVirtualCam() error {
+	_, err := client.Client.Outputs.ToggleVirtualCam()
 	return err
 }
 
 func startVirtualCam() error {
-	_, err := client.VirtualCam.StartVirtualCam()
+	_, err := client.Client.Outputs.StartVirtualCam()
 	return err
 }
 
 func stopVirtualCam() error {
-	_, err := client.VirtualCam.StopVirtualCam()
+	_, err := client.Client.Outputs.StopVirtualCam()
 	return err
 }
 
 func virtualCamStatus() error {
-	r, err := client.VirtualCam.GetVirtualCamStatus()
+	r, err := client.Client.Outputs.GetVirtualCamStatus()
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Virtual camera: %s\n", strconv.FormatBool(r.IsVirtualCam))
-	if !r.IsVirtualCam {
-		return nil
-	}
-
-	fmt.Printf("Timecode: %s\n", r.VirtualCamTimecode)
+	fmt.Printf("Virtual camera: %s\n", strconv.FormatBool(r.OutputActive))
 	return nil
 }
 
@@ -83,5 +79,9 @@ func init() {
 	virtualCamCmd.AddCommand(startVirtualCamCmd)
 	virtualCamCmd.AddCommand(stopVirtualCamCmd)
 	virtualCamCmd.AddCommand(virtualCamStatusCmd)
-	rootCmd.AddCommand(virtualCamCmd)
+}
+
+// RegisterVirtualCamCommands adds all virtual camera commands to the given parent command
+func RegisterVirtualCamCommands(parent *coral.Command) {
+	parent.AddCommand(virtualCamCmd)
 }

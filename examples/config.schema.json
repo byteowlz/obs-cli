@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/byteowlz/obs-cli/schemas/config.schema.json",
+  "title": "obs-cli configuration",
+  "description": "Configuration schema for obs-cli - a command-line remote control for OBS",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference for editor support"
+    },
+    "host": {
+      "type": "string",
+      "description": "OBS WebSocket server host",
+      "default": "localhost",
+      "examples": ["localhost", "192.168.1.100", "obs-studio.local"]
+    },
+    "port": {
+      "type": "integer",
+      "description": "OBS WebSocket server port (4455 for OBS 28+, 4444 for older versions)",
+      "default": 4455,
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "password": {
+      "type": "string",
+      "description": "OBS WebSocket server password (leave empty if authentication is disabled)",
+      "default": ""
+    },
+    "profiles": {
+      "type": "array",
+      "description": "Named server profiles for connecting to multiple OBS instances",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Profile name used with --profile flag"
+          },
+          "host": {
+            "type": "string",
+            "description": "OBS WebSocket server host for this profile"
+          },
+          "port": {
+            "type": "integer",
+            "description": "OBS WebSocket server port for this profile",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "password": {
+            "type": "string",
+            "description": "OBS WebSocket server password for this profile"
+          }
+        },
+        "required": ["name", "host", "port"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

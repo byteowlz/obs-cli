@@ -1,12 +1,12 @@
-package main
+package outputs
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 
 	"github.com/dustin/go-humanize"
 	"github.com/muesli/coral"
+	"github.com/muesli/obs-cli/internal/client"
 )
 
 var (
@@ -21,7 +21,7 @@ var (
 		Use:   "toggle",
 		Short: "Toggle recording",
 		RunE: func(cmd *coral.Command, args []string) error {
-			return startStopRecording()
+			return toggleRecording()
 		},
 	}
 
@@ -66,7 +66,7 @@ var (
 		Use:   "toggle",
 		Short: "Pause/resume recording",
 		RunE: func(cmd *coral.Command, args []string) error {
-			return pauseResumeRecording()
+			return togglePauseRecording()
 		},
 	}
 
@@ -79,66 +79,56 @@ var (
 	}
 )
 
-func startStopRecording() error {
-	_, err := client.Recording.StartStopRecording()
+func toggleRecording() error {
+	_, err := client.Client.Record.ToggleRecord()
 	return err
 }
 
 func startRecording() error {
-	_, err := client.Recording.StartRecording()
+	_, err := client.Client.Record.StartRecord()
 	return err
 }
 
 func stopRecording() error {
-	_, err := client.Recording.StopRecording()
+	_, err := client.Client.Record.StopRecord()
 	return err
 }
 
 func pauseRecording() error {
-	_, err := client.Recording.PauseRecording()
+	_, err := client.Client.Record.PauseRecord()
 	return err
 }
 
 func resumeRecording() error {
-	_, err := client.Recording.ResumeRecording()
+	_, err := client.Client.Record.ResumeRecord()
 	return err
 }
 
-func pauseResumeRecording() error {
-	r, err := client.Recording.GetRecordingStatus()
-	if err != nil {
-		return err
-	}
-	if !r.IsRecording {
-		return fmt.Errorf("recording is not running")
-	}
-
-	if r.IsRecordingPaused {
-		return resumeRecording()
-	}
-	return pauseRecording()
+func togglePauseRecording() error {
+	_, err := client.Client.Record.ToggleRecordPause()
+	return err
 }
 
 func recordingStatus() error {
-	r, err := client.Recording.GetRecordingStatus()
+	r, err := client.Client.Record.GetRecordStatus()
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Recording: %s\n", strconv.FormatBool(r.IsRecording))
-	if !r.IsRecording {
+	fmt.Printf("Recording: %s\n", strconv.FormatBool(r.OutputActive))
+	if !r.OutputActive {
 		return nil
 	}
 
-	fmt.Printf("Paused: %s\n", strconv.FormatBool(r.IsRecordingPaused))
-	fmt.Printf("File: %s\n", r.RecordingFilename)
-	fmt.Printf("Timecode: %s\n", r.RecordTimecode)
+	fmt.Printf("Paused: %s\n", strconv.FormatBool(r.OutputPaused))
+	fmt.Printf("Timecode: %s\n", r.OutputTimecode)
+	fmt.Printf("Duration: %.0f ms\n", r.OutputDuration)
+	fmt.Printf("Bytes: %.0f\n", r.OutputBytes)
 
-	st, err := os.Stat(r.RecordingFilename)
-	if err != nil {
-		return err
+	// Try to get file size if path is available
+	if r.OutputBytes > 0 {
+		fmt.Printf("Size: %s\n", humanize.Bytes(uint64(r.OutputBytes)))
 	}
-	fmt.Printf("Filesize: %s\n", humanize.Bytes(uint64(st.Size())))
 
 	return nil
 }
@@ -153,6 +143,9 @@ func init() {
 	recordingCmd.AddCommand(stopRecordingCmd)
 	recordingCmd.AddCommand(pauseRecordingCmd)
 	recordingCmd.AddCommand(recordingStatusCmd)
+}
 
-	rootCmd.AddCommand(recordingCmd)
+// RegisterRecordingCommands adds all recording commands to the given parent command
+func RegisterRecordingCommands(parent *coral.Command) {
+	parent.AddCommand(recordingCmd)
 }

@@ -1,12 +1,13 @@
-package main
+package obsconfig
 
 import (
 	"errors"
 	"fmt"
 	"strings"
 
-	scenecollections "github.com/andreykaipov/goobs/api/requests/scene_collections"
+	"github.com/andreykaipov/goobs/api/requests/config"
 	"github.com/muesli/coral"
+	"github.com/muesli/obs-cli/internal/client"
 )
 
 var (
@@ -46,32 +47,32 @@ var (
 )
 
 func listSceneCollections() error {
-	r, err := client.SceneCollections.ListSceneCollections()
+	r, err := client.Client.Config.GetSceneCollectionList()
 	if err != nil {
 		return err
 	}
 
 	for _, v := range r.SceneCollections {
-		fmt.Println(v.ScName)
+		fmt.Println(v)
 	}
 	return nil
 }
 
 func setSceneCollection(collection string) error {
-	r := scenecollections.SetCurrentSceneCollectionParams{
-		ScName: collection,
+	r := config.SetCurrentSceneCollectionParams{
+		SceneCollectionName: &collection,
 	}
-	_, err := client.SceneCollections.SetCurrentSceneCollection(&r)
+	_, err := client.Client.Config.SetCurrentSceneCollection(&r)
 	return err
 }
 
 func getSceneCollection() error {
-	r, err := client.SceneCollections.GetCurrentSceneCollection()
+	r, err := client.Client.Config.GetSceneCollectionList()
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(r.ScName)
+	fmt.Println(r.CurrentSceneCollectionName)
 	return nil
 }
 
@@ -79,5 +80,9 @@ func init() {
 	sceneCollectionCmd.AddCommand(listSceneCollectionCmd)
 	sceneCollectionCmd.AddCommand(setSceneCollectionCmd)
 	sceneCollectionCmd.AddCommand(getSceneCollectionCmd)
-	rootCmd.AddCommand(sceneCollectionCmd)
+}
+
+// RegisterSceneCollectionCommands adds all scene collection commands to the given parent command
+func RegisterSceneCollectionCommands(parent *coral.Command) {
+	parent.AddCommand(sceneCollectionCmd)
 }

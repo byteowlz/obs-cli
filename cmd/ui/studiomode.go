@@ -1,11 +1,12 @@
-package main
+package ui
 
 import (
 	"fmt"
 	"strconv"
 
-	studiomode "github.com/andreykaipov/goobs/api/requests/studio_mode"
+	"github.com/andreykaipov/goobs/api/requests/ui"
 	"github.com/muesli/coral"
+	"github.com/muesli/obs-cli/internal/client"
 )
 
 var (
@@ -58,19 +59,28 @@ var (
 )
 
 func disableStudioMode() error {
-	_, err := client.StudioMode.DisableStudioMode()
+	enabled := false
+	_, err := client.Client.Ui.SetStudioModeEnabled(&ui.SetStudioModeEnabledParams{
+		StudioModeEnabled: &enabled,
+	})
 	return err
 }
 
 func enableStudioMode() error {
-	_, err := client.StudioMode.EnableStudioMode()
+	enabled := true
+	_, err := client.Client.Ui.SetStudioModeEnabled(&ui.SetStudioModeEnabledParams{
+		StudioModeEnabled: &enabled,
+	})
 	return err
 }
 
-// Determine if the studio mode is currently enabled in OBS.
+// IsStudioModeEnabled determines if the studio mode is currently enabled in OBS.
 func IsStudioModeEnabled() (bool, error) {
-	r, err := client.StudioMode.GetStudioModeStatus()
-	return r.StudioMode, err
+	r, err := client.Client.Ui.GetStudioModeEnabled()
+	if err != nil {
+		return false, err
+	}
+	return r.StudioModeEnabled, nil
 }
 
 func studioModeStatus() error {
@@ -84,12 +94,21 @@ func studioModeStatus() error {
 }
 
 func toggleStudioMode() error {
-	_, err := client.StudioMode.ToggleStudioMode()
+	enabled, err := IsStudioModeEnabled()
+	if err != nil {
+		return err
+	}
+	newEnabled := !enabled
+	_, err = client.Client.Ui.SetStudioModeEnabled(&ui.SetStudioModeEnabledParams{
+		StudioModeEnabled: &newEnabled,
+	})
 	return err
 }
 
 func transitionToProgram() error {
-	_, err := client.StudioMode.TransitionToProgram(&studiomode.TransitionToProgramParams{})
+	// In OBS WebSocket 5.x, triggering a transition is done via TriggerStudioModeTransition
+	// but this is in the transitions package. For now, we can trigger using the current transition.
+	_, err := client.Client.Transitions.TriggerStudioModeTransition()
 	return err
 }
 
@@ -99,5 +118,9 @@ func init() {
 	studioModeCmd.AddCommand(studioModeStatusCmd)
 	studioModeCmd.AddCommand(toggleStudioModeCmd)
 	studioModeCmd.AddCommand(transitionToProgramCmd)
-	rootCmd.AddCommand(studioModeCmd)
+}
+
+// RegisterStudioModeCommands adds all studio mode commands to the given parent command
+func RegisterStudioModeCommands(parent *coral.Command) {
+	parent.AddCommand(studioModeCmd)
 }

@@ -1,4 +1,4 @@
-package main
+package inputs
 
 import (
 	"errors"
@@ -30,11 +30,8 @@ func countdown(label string, duration time.Duration) error {
 
 	c := time.Tick(time.Second)
 	for range c {
-		rem := time.Until(until)
-		if rem < 0 {
-			rem = 0
-		}
-		if err := changeLabel(label, fmtDuration(rem)); err != nil {
+		rem := max(time.Until(until), 0)
+		if err := ChangeLabel(label, fmtDuration(rem)); err != nil {
 			return err
 		}
 

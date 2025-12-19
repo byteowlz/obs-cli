@@ -1,4 +1,4 @@
-package main
+package scenes
 
 import (
 	"errors"
@@ -6,8 +6,9 @@ import (
 	"strings"
 
 	"github.com/andreykaipov/goobs/api/requests/scenes"
-	studiomode "github.com/andreykaipov/goobs/api/requests/studio_mode"
 	"github.com/muesli/coral"
+	"github.com/muesli/obs-cli/cmd/ui"
+	"github.com/muesli/obs-cli/internal/client"
 )
 
 var (
@@ -69,45 +70,45 @@ var (
 )
 
 func listScenes() error {
-	r, err := client.Scenes.GetSceneList()
+	r, err := client.Client.Scenes.GetSceneList()
 	if err != nil {
 		return err
 	}
 
 	for _, v := range r.Scenes {
-		fmt.Println(v.Name)
+		fmt.Println(v.SceneName)
 	}
 	return nil
 }
 
 func getScene() error {
-	r, err := client.Scenes.GetCurrentScene()
+	r, err := client.Client.Scenes.GetCurrentProgramScene()
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(r.Name)
+	fmt.Println(r.SceneName)
 	return nil
 }
 
 func setCurrentScene(scene string) error {
-	r := scenes.SetCurrentSceneParams{
-		SceneName: scene,
+	r := scenes.SetCurrentProgramSceneParams{
+		SceneName: &scene,
 	}
-	_, err := client.Scenes.SetCurrentScene(&r)
+	_, err := client.Client.Scenes.SetCurrentProgramScene(&r)
 	return err
 }
 
 func setPreviewScene(scene string) error {
-	r := studiomode.SetPreviewSceneParams{
-		SceneName: scene,
+	r := scenes.SetCurrentPreviewSceneParams{
+		SceneName: &scene,
 	}
-	_, err := client.StudioMode.SetPreviewScene(&r)
+	_, err := client.Client.Scenes.SetCurrentPreviewScene(&r)
 	return err
 }
 
 func switchScene(scene string) error {
-	isStudioModeEnabled, err := IsStudioModeEnabled()
+	isStudioModeEnabled, err := ui.IsStudioModeEnabled()
 	if err != nil {
 		return err
 	}
@@ -124,5 +125,9 @@ func init() {
 	sceneCmd.AddCommand(getSceneCmd)
 	sceneCmd.AddCommand(previewSceneCmd)
 	sceneCmd.AddCommand(switchSceneCmd)
-	rootCmd.AddCommand(sceneCmd)
+}
+
+// RegisterSceneCommands adds all scene commands to the given parent command
+func RegisterSceneCommands(parent *coral.Command) {
+	parent.AddCommand(sceneCmd)
 }

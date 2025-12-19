@@ -1,12 +1,12 @@
-package main
+package scenes
 
 import (
 	"errors"
 	"fmt"
 
-	sceneitems "github.com/andreykaipov/goobs/api/requests/scene_items"
-	"github.com/andreykaipov/goobs/api/typedefs"
+	"github.com/andreykaipov/goobs/api/requests/sceneitems"
 	"github.com/muesli/coral"
+	"github.com/muesli/obs-cli/internal/client"
 )
 
 var (
@@ -71,62 +71,51 @@ var (
 			return getSceneItemVisibility(args[0], args[1:]...)
 		},
 	}
-
-	centerSceneItemCmd = &coral.Command{
-		Use:   "center",
-		Short: "Horizontally centers a scene-item",
-		RunE: func(cmd *coral.Command, args []string) error {
-			if len(args) < 2 {
-				return errors.New("center requires a scene and scene-item")
-			}
-			return centerSceneItem(args[0], args[1:]...)
-		},
-	}
 )
 
 func listSceneItems(scene string) error {
-	resp, err := client.Scenes.GetSceneList()
+	resp, err := client.Client.SceneItems.GetSceneItemList(&sceneitems.GetSceneItemListParams{
+		SceneName: &scene,
+	})
 	if err != nil {
 		return err
 	}
 
-	for _, v := range resp.Scenes {
-		if v.Name != scene {
-			continue
+	for _, item := range resp.SceneItems {
+		enabled := "visible"
+		if !item.SceneItemEnabled {
+			enabled = "hidden"
 		}
-
-		for _, s := range v.Sources {
-			fmt.Println(s.Name)
-		}
+		fmt.Printf("%s (id: %d, %s)\n", item.SourceName, item.SceneItemID, enabled)
 	}
 
 	return nil
 }
 
+// getSceneItemId finds the scene item ID for a source name in a scene
+func getSceneItemId(scene, sourceName string) (int, error) {
+	resp, err := client.Client.SceneItems.GetSceneItemId(&sceneitems.GetSceneItemIdParams{
+		SceneName:  &scene,
+		SourceName: &sourceName,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return resp.SceneItemId, nil
+}
+
 func setSceneItemVisible(visible bool, scene string, items ...string) error {
 	for _, item := range items {
-		p := sceneitems.GetSceneItemPropertiesParams{
-			Item:      &typedefs.Item{Name: item},
-			SceneName: scene,
-		}
-		resp, err := client.SceneItems.GetSceneItemProperties(&p)
+		itemId, err := getSceneItemId(scene, item)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to find item %q: %w", item, err)
 		}
 
-		r := sceneitems.SetSceneItemPropertiesParams{
-			SceneName: scene,
-			Item:      &typedefs.Item{Name: item},
-			Bounds:    resp.Bounds,
-			Crop:      resp.Crop,
-			Position:  resp.Position,
-			Rotation:  resp.Rotation,
-			Scale:     resp.Scale,
-			Locked:    &resp.Locked,
-			Visible:   &visible,
-		}
-
-		_, err = client.SceneItems.SetSceneItemProperties(&r)
+		_, err = client.Client.SceneItems.SetSceneItemEnabled(&sceneitems.SetSceneItemEnabledParams{
+			SceneName:        &scene,
+			SceneItemId:      &itemId,
+			SceneItemEnabled: &visible,
+		})
 		if err != nil {
 			return err
 		}
@@ -137,16 +126,27 @@ func setSceneItemVisible(visible bool, scene string, items ...string) error {
 
 func toggleSceneItem(scene string, items ...string) error {
 	for _, item := range items {
-		p := sceneitems.GetSceneItemPropertiesParams{
-			Item:      &typedefs.Item{Name: item},
-			SceneName: scene,
+		itemId, err := getSceneItemId(scene, item)
+		if err != nil {
+			return fmt.Errorf("failed to find item %q: %w", item, err)
 		}
-		resp, err := client.SceneItems.GetSceneItemProperties(&p)
+
+		// Get current enabled state
+		resp, err := client.Client.SceneItems.GetSceneItemEnabled(&sceneitems.GetSceneItemEnabledParams{
+			SceneName:   &scene,
+			SceneItemId: &itemId,
+		})
 		if err != nil {
 			return err
 		}
 
-		err = setSceneItemVisible(!resp.Visible, scene, item)
+		// Toggle the state
+		newEnabled := !resp.SceneItemEnabled
+		_, err = client.Client.SceneItems.SetSceneItemEnabled(&sceneitems.SetSceneItemEnabledParams{
+			SceneName:        &scene,
+			SceneItemId:      &itemId,
+			SceneItemEnabled: &newEnabled,
+		})
 		if err != nil {
 			return err
 		}
@@ -157,66 +157,34 @@ func toggleSceneItem(scene string, items ...string) error {
 
 func getSceneItemVisibility(scene string, items ...string) error {
 	for _, item := range items {
-		p := sceneitems.GetSceneItemPropertiesParams{
-			Item:      &typedefs.Item{Name: item},
-			SceneName: scene,
+		itemId, err := getSceneItemId(scene, item)
+		if err != nil {
+			return fmt.Errorf("failed to find item %q: %w", item, err)
 		}
-		resp, err := client.SceneItems.GetSceneItemProperties(&p)
+
+		resp, err := client.Client.SceneItems.GetSceneItemEnabled(&sceneitems.GetSceneItemEnabledParams{
+			SceneName:   &scene,
+			SceneItemId: &itemId,
+		})
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("%s: %t\n", resp.Name, resp.Visible)
-	}
-
-	return nil
-}
-
-func centerSceneItem(scene string, items ...string) error {
-	for _, item := range items {
-		p := sceneitems.GetSceneItemPropertiesParams{
-			Item:      &typedefs.Item{Name: item},
-			SceneName: scene,
-		}
-		resp, err := client.SceneItems.GetSceneItemProperties(&p)
-		if err != nil {
-			return err
-		}
-
-		vresp, err := client.General.GetVideoInfo()
-		if err != nil {
-			return err
-		}
-
-		pos := resp.Position
-		pos.X = float64(vresp.BaseWidth) / 2
-		r := sceneitems.SetSceneItemPropertiesParams{
-			SceneName: scene,
-			Item:      &typedefs.Item{Name: item},
-			Bounds:    resp.Bounds,
-			Crop:      resp.Crop,
-			Position:  pos,
-			Rotation:  resp.Rotation,
-			Scale:     resp.Scale,
-			Locked:    &resp.Locked,
-			Visible:   &resp.Visible,
-		}
-
-		_, err = client.SceneItems.SetSceneItemProperties(&r)
-		if err != nil {
-			return err
-		}
+		fmt.Printf("%s: %t\n", item, resp.SceneItemEnabled)
 	}
 
 	return nil
 }
 
 func init() {
-	sceneItemCmd.AddCommand(centerSceneItemCmd)
 	sceneItemCmd.AddCommand(toggleSceneItemCmd)
 	sceneItemCmd.AddCommand(showSceneItemCmd)
 	sceneItemCmd.AddCommand(hideSceneItemCmd)
 	sceneItemCmd.AddCommand(getSceneItemVisibilityCmd)
 	sceneItemCmd.AddCommand(listSceneItemsCmd)
-	rootCmd.AddCommand(sceneItemCmd)
+}
+
+// RegisterSceneItemCommands adds all scene item commands to the given parent command
+func RegisterSceneItemCommands(parent *coral.Command) {
+	parent.AddCommand(sceneItemCmd)
 }

@@ -1,12 +1,13 @@
-package main
+package obsconfig
 
 import (
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/andreykaipov/goobs/api/requests/profiles"
+	"github.com/andreykaipov/goobs/api/requests/config"
 	"github.com/muesli/coral"
+	"github.com/muesli/obs-cli/internal/client"
 )
 
 var (
@@ -46,32 +47,32 @@ var (
 )
 
 func listProfiles() error {
-	r, err := client.Profiles.ListProfiles()
+	r, err := client.Client.Config.GetProfileList()
 	if err != nil {
 		return err
 	}
 
 	for _, v := range r.Profiles {
-		fmt.Println(v.ProfileName)
+		fmt.Println(v)
 	}
 	return nil
 }
 
-func setProfile(profile string) error {
-	r := profiles.SetCurrentProfileParams{
-		ProfileName: profile,
+func setProfile(profileName string) error {
+	r := config.SetCurrentProfileParams{
+		ProfileName: &profileName,
 	}
-	_, err := client.Profiles.SetCurrentProfile(&r)
+	_, err := client.Client.Config.SetCurrentProfile(&r)
 	return err
 }
 
 func getProfile() error {
-	r, err := client.Profiles.GetCurrentProfile()
+	r, err := client.Client.Config.GetProfileList()
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(r.ProfileName)
+	fmt.Println(r.CurrentProfileName)
 	return nil
 }
 
@@ -79,5 +80,9 @@ func init() {
 	profileCmd.AddCommand(listProfileCmd)
 	profileCmd.AddCommand(setProfileCmd)
 	profileCmd.AddCommand(getProfileCmd)
-	rootCmd.AddCommand(profileCmd)
+}
+
+// RegisterProfileCommands adds all profile commands to the given parent command
+func RegisterProfileCommands(parent *coral.Command) {
+	parent.AddCommand(profileCmd)
 }
