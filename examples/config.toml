@@ -1,6 +1,6 @@
 # obs-cli configuration file
 # Schema reference for LSP support (e.g., Even Better TOML extension)
-"$schema" = "https://raw.githubusercontent.com/byteowlz/schemas/refs/heads/main/obs-cli/obs-cli.config.schema.json"
+#:schema https://raw.githubusercontent.com/byteowlz/schemas/refs/heads/main/obs-cli/obs-cli.config.schema.json
 
 # OBS WebSocket server host
 # Can be overridden with OBS_CLI_HOST environment variable or --host flag
