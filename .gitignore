@@ -1,5 +1,7 @@
 obs-cli
 dist/
+*.app/
+.obs-cli-app.*/
 
 # ---- ignr (detected: go,macos) @ 2025-12-19 ----
 

@@ -1,25 +1,16 @@
 # obs-cli
 
-[![Latest Release](https://img.shields.io/github/release/muesli/obs-cli.svg)](https://github.com/muesli/obs-cli/releases)
-[![Build Status](https://github.com/muesli/obs-cli/workflows/build/badge.svg)](https://github.com/muesli/obs-cli/actions)
+[![Build Status](https://github.com/byteowlz/obs-cli/actions/workflows/build.yml/badge.svg)](https://github.com/byteowlz/obs-cli/actions)
 [![Go ReportCard](https://goreportcard.com/badge/muesli/obs-cli)](https://goreportcard.com/report/muesli/obs-cli)
 [![GoDoc](https://godoc.org/github.com/golang/gddo?status.svg)](https://pkg.go.dev/github.com/muesli/obs-cli)
 
-OBS-cli is a command-line remote control for OBS. It requires the
-[obs-websocket](https://github.com/Palakis/obs-websocket) plugin to be installed
-on your system.
+This byteowlz fork of [muesli/obs-cli](https://github.com/muesli/obs-cli) remotely controls OBS through its WebSocket server (built into current OBS versions).
 
 ## Installation
 
 ### Packages & Binaries
 
-On Arch Linux you can simply install the package from the AUR:
-
-    yay -S obs-cli
-
-Or download a binary from the [releases](https://github.com/muesli/obs-cli/releases)
-page. Linux (including ARM) binaries are available, as well as Debian and RPM
-packages.
+Upstream/AUR packages do not include this fork's named-session additions. Build from this repository, or use its own release artifacts when published.
 
 ### Build From Source
 
@@ -27,9 +18,24 @@ Alternatively you can also build `obs-cli` from source. Make sure you have a
 working Go environment (Go 1.23 or higher is required). See the
 [install instructions](https://golang.org/doc/install.html).
 
-To install obs-cli, simply run:
+```sh
+git clone https://github.com/byteowlz/obs-cli.git
+cd obs-cli
+just install
+obs-cli --version
+```
 
-    go install github.com/muesli/obs-cli@latest
+### Optional macOS launcher
+
+```sh
+just install-macos-app
+```
+
+This generates a self-contained `~/Applications/OBS Recording.app` with a screen/name picker. Maintained AppleScript, Swift helper, and build/install sources live in [`integrations/macos/`](integrations/macos/README.md); generated app bundles are not committed. Config, credentials, state, and recordings stay outside git. OBS recording sources and the CLI connection must already be configured.
+
+### Versioning
+
+`VERSION` is the local build/install version. GoReleaser injects its release version into the same `main.version` field. `just release-check` validates code and archive configuration; tagged releases use `v<version>`. CI builds snapshot archives without publishing a GitHub release. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Usage
 

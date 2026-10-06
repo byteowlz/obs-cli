@@ -8,11 +8,14 @@ import (
 	"github.com/muesli/obs-cli/internal/client"
 )
 
-var version string
+var version = "dev"
 
 func main() {
 	// Set version for user-agent
 	client.Version = version
+	cmd.RootCmd.Version = version
+	// Register before command discovery so mixed connection/version flags parse correctly.
+	cmd.RootCmd.InitDefaultVersionFlag()
 
 	if err := cmd.Execute(); err != nil {
 		fmt.Println(err)
