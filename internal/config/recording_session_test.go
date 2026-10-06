@@ -21,6 +21,8 @@ obs_profile = "Capture"
 scene = "Program"
 source_names = ["Screen", "Camera"]
 filter_name = "Capture source"
+composition = "16:9"
+output_max_dimension = 1280
 `), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +30,7 @@ filter_name = "Capture source"
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := RecordingSessionConfig{"~/Videos", "Sessions", "Capture", "Program", []string{"Screen", "Camera"}, "Capture source"}
+	want := RecordingSessionConfig{BaseDirectory: "~/Videos", SceneCollection: "Sessions", OBSProfile: "Capture", Scene: "Program", SourceNames: []string{"Screen", "Camera"}, FilterName: "Capture source", Composition: "16:9", OutputMaxDimension: 1280}
 	if !reflect.DeepEqual(cfg.RecordingSession, want) {
 		t.Fatalf("overrides not loaded: %+v", cfg.RecordingSession)
 	}
@@ -96,7 +98,10 @@ func TestRecordingSessionSchemaMatchesDefaults(t *testing.T) {
 	var schema struct {
 		Properties map[string]struct {
 			Properties map[string]struct {
-				Default any `json:"default"`
+				Default any      `json:"default"`
+				Enum    []string `json:"enum"`
+				Minimum int      `json:"minimum"`
+				Maximum int      `json:"maximum"`
 			} `json:"properties"`
 		} `json:"properties"`
 	}
@@ -108,10 +113,14 @@ func TestRecordingSessionSchemaMatchesDefaults(t *testing.T) {
 		"base_directory": c.BaseDirectory, "scene_collection": c.SceneCollection,
 		"obs_profile": c.OBSProfile, "scene": c.Scene, "filter_name": c.FilterName,
 		"source_names": []any{c.SourceNames[0], c.SourceNames[1]},
+		"composition":  c.Composition, "output_max_dimension": float64(c.OutputMaxDimension),
 	}
 	properties := schema.Properties["recording_session"].Properties
 	if len(properties) != len(want) {
 		t.Fatalf("session schema has %d properties, want %d", len(properties), len(want))
+	}
+	if !reflect.DeepEqual(properties["composition"].Enum, []string{"screen", "16:9", "keep"}) || properties["output_max_dimension"].Minimum != 2 || properties["output_max_dimension"].Maximum != 16384 {
+		t.Fatal("composition choices or output bounds missing from schema")
 	}
 	for name, value := range want {
 		if !reflect.DeepEqual(properties[name].Default, value) {

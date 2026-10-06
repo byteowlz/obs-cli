@@ -126,6 +126,7 @@ func testConfig(t *testing.T) config.RecordingSessionConfig {
 	t.Helper()
 	c := config.DefaultRecordingSessionConfig()
 	c.BaseDirectory = t.TempDir()
+	c.Composition = "keep" // Existing path/start contract is exercised independently.
 	return c
 }
 

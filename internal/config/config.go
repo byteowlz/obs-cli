@@ -186,6 +186,9 @@ obs_profile = "MultiTrack"
 scene = "Composite"
 source_names = ["Desktop", "Cam Link"]
 filter_name = "Source Record"
+# screen: native screen aspect; 16:9: fixed canvas; keep: preserve existing layout
+composition = "screen"
+output_max_dimension = 1920
 `
 
 	return os.WriteFile(path, []byte(content), 0644)

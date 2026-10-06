@@ -83,6 +83,10 @@ obs-cli recording status
 
 ```sh
 obs-cli recording session "Take one"
+# Optional macOS display selection; obtain UUID from an OS display picker.
+obs-cli recording session "Take two" --screen <display-UUID> --composition screen
+obs-cli recording session "Fixed canvas" --composition 16:9
+obs-cli recording session "Existing layout" --composition keep
 # Or omit the name to prompt on interactive stdin (not in CI).
 obs-cli recording session
 ```
@@ -110,9 +114,45 @@ already have:
 
 Active recording (including paused recording), active streaming, mismatched
 bindings, missing/disabled/wrong filters and unreadable paths are rejected before
-any changes. All old paths are captured first; the program directory and **both**
-filter `path` settings are applied and read back before `StartRecord`. Filter
-updates overlay only `path`, preserving filename and all other settings.
+any changes. All old paths and both valid source filters are checked first.
+Composition is prepared before reserving the folder. The program directory and
+**both** filter `path` settings are then applied and read back before `StartRecord`.
+Path updates overlay only `path`, preserving filenames and all other settings.
+
+Composition defaults to `screen`: the canvas follows the **actual native Desktop
+capture size**, not its transformed scene rectangle or OS logical display size.
+Canvas/output dimensions are even; the output is aspect-preserving, rounded to the
+nearest even pixels and capped at `output_max_dimension` (default 1920), without
+upscaling small captures. For example, 3600x2338 produces canvas 3600x2338 and
+output 1920x1246. Odd native canvas dimensions round down to even; Desktop fits
+centered with no crop. `16:9` uses a fixed 1920x1080 canvas/output (reduced by a
+smaller configured cap) and letterboxes Desktop. The camera is a quarter of the
+shown Desktop width, preserves its native aspect, and sits bottom-right **inside
+Desktop content**, inset 1.25% of its displayed width, never in a black bar. Extreme
+tall cameras/panoramas reduce the PIP/inset further to keep it inside the content.
+`keep` leaves existing video settings and transforms untouched.
+
+`--composition screen|16:9|keep` overrides config. Optional `--screen UUID` overlays
+only `display_uuid` and `type=0` on the configured Desktop source; it requires a
+macOS `screen_capture` input. Without this flag, the Desktop Properties choice is
+preserved and input settings are not queried. Display enumeration/selection UI
+belongs to an external OS picker; this command never queries OBS display-property
+lists. Desktop must have nonzero native dimensions stable across two successive
+reads (100ms intervals, at most 51 reads); explicit selection must also match the
+requested UUID/type. Unknown, zero or oversized dimensions fail before start.
+Source names are ordered **[desktop, camera]**; both must be direct items in the
+configured program scene for adaptive composition.
+
+When base/output resolutions change, Source Record private views must not survive
+an OBS video reset. The adapter snapshots **both complete filters** (all settings,
+index, enabled state), removes both, waits 500ms for queued graphics cleanup,
+applies video settings/transforms, recreates/verifies both identical filters, and
+waits 500ms for recreated views to settle. Idle status/bindings are rechecked before
+mutations. A reset/restoration failure attempts to restore every removed filter
+best-effort and **never starts recording**. If video resolutions already match,
+there is no reset or filter removal/recreation. Native isolated source resolutions,
+encoder/audio/filename settings and FPS are preserved. Selection/layout changes
+may remain applied on pre-start failure; only session path changes are rolled back.
 
 Before requesting start, failures restore attempted path changes in reverse order,
 best effort, and report rollback errors. Once start is requested, output paths and
@@ -122,8 +162,8 @@ to become active, rather than treating the asynchronous StartRecord acknowledgem
 as activation. On any uncertain start, check `recording status` before retrying.
 Requests use the existing WebSocket timeout; folder collision retries are bounded.
 OBS has no atomic session transaction: do not run concurrent session commands or change OBS during
-startup. This command never switches collections/profiles/scenes or configures
-capture hardware.
+startup. This command never switches collections/profiles/scenes or changes camera
+hardware; optional `--screen` changes only the Desktop display selection.
 
 Use `recording stop` and `recording status` as usual. Pause propagation depends
 on the Source Record version; this workflow validates start/stop, not pause/resume.
@@ -142,8 +182,10 @@ base_directory = "~/Movies" # ~ and environment variables expand; absolute local
 scene_collection = "MultiTrack"
 obs_profile = "MultiTrack"
 scene = "Composite"
-source_names = ["Desktop", "Cam Link"] # exactly two distinct sources
+source_names = ["Desktop", "Cam Link"] # ordered desktop, camera; two distinct sources
 filter_name = "Source Record"          # same filter name on both sources
+composition = "screen"                # screen | 16:9 | keep
+output_max_dimension = 1920            # even output cap; accepted range 2..16384
 ```
 
 ```sh

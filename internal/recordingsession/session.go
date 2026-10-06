@@ -1,4 +1,4 @@
-// Package recordingsession starts a named session without reconfiguring OBS.
+// Package recordingsession safely composes and starts named local recordings.
 package recordingsession
 
 import (
@@ -30,8 +30,8 @@ type RecordingSettings struct {
 	Filename string
 }
 
-// OBS is the narrow, fakeable boundary for the session workflow. No methods can
-// switch collections/profiles/scenes, configure devices, or stop other outputs.
+// OBS is the narrow, fakeable boundary for session paths and start. Composition
+// uses the separate CompositionOBS boundary; neither can stop other outputs.
 type OBS interface {
 	RecordActive() (bool, error)
 	StreamActive() (bool, error)
@@ -217,10 +217,19 @@ func uncertainStart(directory string, cause error) error {
 // never cause a later invocation to reuse a potentially recorded-in directory.
 // The OBS API is not transactional; callers must not concurrently control OBS.
 func Start(obs OBS, c config.RecordingSessionConfig, name string, now time.Time) (string, error) {
+	return StartWithOptions(obs, c, name, now, Options{})
+}
+
+// StartWithOptions optionally selects a display and overrides config composition.
+func StartWithOptions(obs OBS, c config.RecordingSessionConfig, name string, now time.Time, opts Options) (string, error) {
 	if err := ValidateName(name); err != nil {
 		return "", err
 	}
 	if err := validateConfig(c); err != nil {
+		return "", err
+	}
+	mode, err := validateOptions(c, opts)
+	if err != nil {
 		return "", err
 	}
 	if err := checkReady(obs, c); err != nil {
@@ -239,6 +248,9 @@ func Start(obs OBS, c config.RecordingSessionConfig, name string, now time.Time)
 		changes = append(changes, pathChange{source + " filter path", func(path string) error {
 			return obs.SetFilterPath(source, c.FilterName, path)
 		}, filter.Path})
+	}
+	if err := prepareComposition(obs, c, opts, mode); err != nil {
+		return "", fmt.Errorf("prepare composition (selection/layout may be retained; recording not started): %w", err)
 	}
 	directory, err := reserveDirectory(c.ExpandedBaseDirectory(), name, now)
 	if err != nil {

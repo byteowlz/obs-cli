@@ -45,3 +45,7 @@ obs_profile = "MultiTrack"
 scene = "Composite"
 source_names = ["Desktop", "Cam Link"]
 filter_name = "Source Record"
+# screen follows actual Desktop capture dimensions; 16:9 fits; keep preserves layout.
+composition = "screen"
+# Maximum program output edge, even pixels, no screen-mode upscaling.
+output_max_dimension = 1920
