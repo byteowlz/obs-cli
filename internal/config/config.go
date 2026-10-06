@@ -16,11 +16,12 @@ const (
 
 // Config holds the application configuration
 type Config struct {
-	Schema   string         `toml:"$schema,omitempty"`
-	Host     string         `toml:"host"`
-	Port     uint32         `toml:"port"`
-	Password string         `toml:"password"`
-	Profiles []ServerConfig `toml:"profiles,omitempty"`
+	Schema           string                 `toml:"$schema,omitempty"`
+	Host             string                 `toml:"host"`
+	Port             uint32                 `toml:"port"`
+	Password         string                 `toml:"password"`
+	Profiles         []ServerConfig         `toml:"profiles,omitempty"`
+	RecordingSession RecordingSessionConfig `toml:"recording_session"`
 }
 
 // ServerConfig allows defining multiple OBS server profiles
@@ -34,10 +35,11 @@ type ServerConfig struct {
 // DefaultConfig returns the default configuration
 func DefaultConfig() *Config {
 	return &Config{
-		Schema:   "https://raw.githubusercontent.com/byteowlz/schemas/refs/heads/main/obs-cli/obs-cli.config.schema.json",
-		Host:     "localhost",
-		Port:     4455,
-		Password: "",
+		Schema:           "https://raw.githubusercontent.com/byteowlz/schemas/refs/heads/main/obs-cli/obs-cli.config.schema.json",
+		Host:             "localhost",
+		Port:             4455,
+		Password:         "",
+		RecordingSession: DefaultRecordingSessionConfig(),
 	}
 }
 
@@ -175,6 +177,15 @@ password = ""
 # host = "192.168.1.100"
 # port = 4455
 # password = "secret"
+
+# Named recording sessions require an already configured OBS setup.
+[recording_session]
+base_directory = "~/Movies"
+scene_collection = "MultiTrack"
+obs_profile = "MultiTrack"
+scene = "Composite"
+source_names = ["Desktop", "Cam Link"]
+filter_name = "Source Record"
 `
 
 	return os.WriteFile(path, []byte(content), 0644)

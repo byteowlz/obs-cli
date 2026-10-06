@@ -24,7 +24,7 @@ packages.
 ### Build From Source
 
 Alternatively you can also build `obs-cli` from source. Make sure you have a
-working Go environment (Go 1.12 or higher is required). See the
+working Go environment (Go 1.23 or higher is required). See the
 [install instructions](https://golang.org/doc/install.html).
 
 To install obs-cli, simply run:
@@ -78,6 +78,74 @@ Display recording status:
 ```
 obs-cli recording status
 ```
+
+#### Named recording sessions
+
+```sh
+obs-cli recording session "Take one"
+# Or omit the name to prompt on interactive stdin (not in CI).
+obs-cli recording session
+```
+
+On success, stdout is the absolute directory created under
+`~/Movies/YYYY-MM-DD_name/`. Repeated names get `_2`, `_3`, etc.; existing
+folders, files and symlinks are never reused (up to 1000 attempts). Names are
+1-80 bytes: letters, numbers, spaces, dots, hyphens and underscores; no paths,
+surrounding whitespace, `.` or `..`.
+
+This is a **local recording workflow**: run the CLI on the OBS computer so the
+reserved directory and OBS output paths refer to the same filesystem. OBS must
+already have:
+
+- Collection and recording profile `MultiTrack`, with program scene `Composite`.
+- Sources `Desktop` and `Cam Link`, each with an enabled `Source Record` filter
+  of kind `source_record_filter`, configured to record when main recording starts.
+- Main MKV output named `program`, and source filenames `desktop` and `camlink`.
+  Format, filenames, encoders and source recording modes are not changed by this CLI.
+
+Active recording (including paused recording), active streaming, mismatched
+bindings, missing/disabled/wrong filters and unreadable paths are rejected before
+any changes. All old paths are captured first; the program directory and **both**
+filter `path` settings are applied and read back before `StartRecord`. Filter
+updates overlay only `path`, preserving filename and all other settings.
+
+Failures restore attempted path changes in reverse order, best effort, and report
+rollback errors. Failed session folders remain reserved, avoiding accidental reuse
+if a request reached OBS but its reply was lost. A start timeout can mean recording
+actually started: check `recording status` in OBS before retrying. Requests use the
+existing WebSocket timeout; folder collision retries are bounded. OBS has no atomic
+session transaction: do not run concurrent session commands or change OBS during
+startup. This command never switches collections/profiles/scenes or configures
+capture hardware.
+
+Use `recording stop` and `recording status` as usual. **Pause affects the main
+recording only; Source Record outputs are not synchronized with pause/resume.**
+Stopping the main output relies on the source filters' existing recording-mode
+configuration; status reports the main output, not individual source outputs.
+
+Add this optional table to `$XDG_CONFIG_HOME/obs-cli/config.toml` (default:
+`~/.config/obs-cli/config.toml`), or any file selected with `--config`, such as
+`user-config.toml`. Missing fields retain these defaults; lists replace defaults.
+`obs_profile` is the OBS recording profile, not `--profile` (server connection).
+
+```toml
+[recording_session]
+base_directory = "~/Movies" # ~ and environment variables expand; absolute local path
+scene_collection = "MultiTrack"
+obs_profile = "MultiTrack"
+scene = "Composite"
+source_names = ["Desktop", "Cam Link"] # exactly two distinct sources
+filter_name = "Source Record"          # same filter name on both sources
+```
+
+```sh
+obs-cli --config ~/.config/obs-cli/user-config.toml recording session demo
+```
+
+The local schema is [`examples/config.schema.json`](examples/config.schema.json).
+For editor support in a copied config, set `#:schema` to that file's absolute path.
+First-run config generation includes the session defaults without overwriting
+existing configs. Developers can run `just check` (build, tests, vet).
 
 ### Scenes
 

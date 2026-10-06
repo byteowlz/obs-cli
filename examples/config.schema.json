@@ -27,6 +27,50 @@
       "description": "OBS WebSocket server password (leave empty if authentication is disabled)",
       "default": ""
     },
+    "recording_session": {
+      "type": "object",
+      "description": "Bindings for named sessions; OBS must already match this setup",
+      "properties": {
+        "base_directory": {
+          "type": "string",
+          "minLength": 1,
+          "default": "~/Movies",
+          "description": "Local output base; home/environment expansion must yield an absolute path"
+        },
+        "scene_collection": {
+          "type": "string",
+          "minLength": 1,
+          "default": "MultiTrack"
+        },
+        "obs_profile": {
+          "type": "string",
+          "minLength": 1,
+          "default": "MultiTrack",
+          "description": "OBS recording profile, not the CLI --profile server connection"
+        },
+        "scene": {
+          "type": "string",
+          "minLength": 1,
+          "default": "Composite",
+          "description": "Required current program scene"
+        },
+        "source_names": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 },
+          "default": ["Desktop", "Cam Link"]
+        },
+        "filter_name": {
+          "type": "string",
+          "minLength": 1,
+          "default": "Source Record",
+          "description": "Enabled source_record_filter filter on each source"
+        }
+      },
+      "additionalProperties": false
+    },
     "profiles": {
       "type": "array",
       "description": "Named server profiles for connecting to multiple OBS instances",

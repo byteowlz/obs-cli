@@ -44,6 +44,7 @@ var (
 	pauseRecordingCmd = &coral.Command{
 		Use:   "pause",
 		Short: "manage paused state",
+		Long:  "Pause affects the main recording only; Source Record outputs are not synchronized.",
 	}
 
 	enablePauseRecordingCmd = &coral.Command{
@@ -138,6 +139,7 @@ func init() {
 	pauseRecordingCmd.AddCommand(resumePauseRecordingCmd)
 	pauseRecordingCmd.AddCommand(togglePauseRecordingCmd)
 
+	recordingCmd.AddCommand(newRecordingSessionCommand())
 	recordingCmd.AddCommand(startStopRecordingCmd)
 	recordingCmd.AddCommand(startRecordingCmd)
 	recordingCmd.AddCommand(stopRecordingCmd)

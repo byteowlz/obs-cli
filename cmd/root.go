@@ -72,6 +72,8 @@ func initConfig() {
 		os.Exit(1)
 	}
 
+	outputs.ConfigureRecordingSession(cfg.RecordingSession)
+
 	// Apply profile if specified
 	if profile != "" {
 		p := cfg.GetProfile(profile)
