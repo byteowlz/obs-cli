@@ -100,8 +100,13 @@ already have:
 - Collection and recording profile `MultiTrack`, with program scene `Composite`.
 - Sources `Desktop` and `Cam Link`, each with an enabled `Source Record` filter
   of kind `source_record_filter`, configured to record when main recording starts.
-- Main MKV output named `program`, and source filenames `desktop` and `camlink`.
-  Format, filenames, encoders and source recording modes are not changed by this CLI.
+- Main MKV output with filename formatting `program`. Both source filters must
+  use `rec_format=mkv` and `record_mode=3` (follow main recording). Timestamped
+  source filenames such as `desktop-%hh-%mm-%ss` and `camlink-%hh-%mm-%ss` are
+  recommended because Source Record can overwrite fixed names on manual restarts.
+  The CLI validates format and recording mode plus the main filename template;
+  it changes none of these settings. Encoder compatibility and actual isolated
+  outputs still need testing.
 
 Active recording (including paused recording), active streaming, mismatched
 bindings, missing/disabled/wrong filters and unreadable paths are rejected before
@@ -109,17 +114,20 @@ any changes. All old paths are captured first; the program directory and **both*
 filter `path` settings are applied and read back before `StartRecord`. Filter
 updates overlay only `path`, preserving filename and all other settings.
 
-Failures restore attempted path changes in reverse order, best effort, and report
-rollback errors. Failed session folders remain reserved, avoiding accidental reuse
-if a request reached OBS but its reply was lost. A start timeout can mean recording
-actually started: check `recording status` in OBS before retrying. Requests use the
-existing WebSocket timeout; folder collision retries are bounded. OBS has no atomic
-session transaction: do not run concurrent session commands or change OBS during
+Before requesting start, failures restore attempted path changes in reverse order,
+best effort, and report rollback errors. Once start is requested, output paths and
+reserved folders are retained even on error: OBS may still be initializing or
+recording. Success waits up to five seconds (100ms polling) for the main recording
+to become active, rather than treating the asynchronous StartRecord acknowledgement
+as activation. On any uncertain start, check `recording status` before retrying.
+Requests use the existing WebSocket timeout; folder collision retries are bounded.
+OBS has no atomic session transaction: do not run concurrent session commands or change OBS during
 startup. This command never switches collections/profiles/scenes or configures
 capture hardware.
 
-Use `recording stop` and `recording status` as usual. **Pause affects the main
-recording only; Source Record outputs are not synchronized with pause/resume.**
+Use `recording stop` and `recording status` as usual. Pause propagation depends
+on the Source Record version; this workflow validates start/stop, not pause/resume.
+Avoid pausing until you have tested all outputs together.
 Stopping the main output relies on the source filters' existing recording-mode
 configuration; status reports the main output, not individual source outputs.
 

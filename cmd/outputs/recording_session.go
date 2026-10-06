@@ -57,7 +57,7 @@ func newRecordingSessionCommand() *coral.Command {
 Requires the configured collection, OBS profile, program scene and two enabled
 Source Record filters. Changes only output paths; does not configure OBS.
 Prints the absolute session directory on stdout. Omitting name prompts on a TTY.
-Use recording stop/status as usual; pause does not synchronize source outputs.`,
+Use recording stop/status as usual; pause propagation is not verified here.`,
 		Example: "  obs-cli recording session demo\n  obs-cli --config ~/.config/obs-cli/user-config.toml recording session \"Take one\"",
 		Args:    coral.MaximumNArgs(1),
 		RunE: func(cmd *coral.Command, args []string) error {

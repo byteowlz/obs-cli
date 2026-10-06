@@ -2,6 +2,7 @@ package client
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/andreykaipov/goobs"
 	obsconfig "github.com/andreykaipov/goobs/api/requests/config"
@@ -67,6 +68,37 @@ func (o RecordingSessionOBS) RecordDirectory() (string, error) {
 	return r.RecordDirectory, nil
 }
 
+func (o RecordingSessionOBS) profileParameter(category, name string) (string, error) {
+	r, err := o.Client.Config.GetProfileParameter(obsconfig.NewGetProfileParameterParams().
+		WithParameterCategory(category).WithParameterName(name))
+	if err != nil {
+		return "", err
+	}
+	return r.ParameterValue, nil
+}
+
+func (o RecordingSessionOBS) RecordingSettings() (recordingsession.RecordingSettings, error) {
+	mode, err := o.profileParameter("Output", "Mode")
+	if err != nil {
+		return recordingsession.RecordingSettings{}, err
+	}
+	var category string
+	switch strings.ToLower(mode) {
+	case "simple":
+		category = "SimpleOutput"
+	case "advanced":
+		category = "AdvOut"
+	default:
+		return recordingsession.RecordingSettings{}, fmt.Errorf("unsupported output mode %q", mode)
+	}
+	format, err := o.profileParameter(category, "RecFormat2")
+	if err != nil {
+		return recordingsession.RecordingSettings{}, err
+	}
+	filename, err := o.profileParameter("Output", "FilenameFormatting")
+	return recordingsession.RecordingSettings{Format: format, Filename: filename}, err
+}
+
 func (o RecordingSessionOBS) SourceFilter(source, filter string) (recordingsession.Filter, error) {
 	r, err := o.Client.Filters.GetSourceFilter(filters.NewGetSourceFilterParams().WithSourceName(source).WithFilterName(filter))
 	if err != nil {
@@ -76,7 +108,12 @@ func (o RecordingSessionOBS) SourceFilter(source, filter string) (recordingsessi
 	if !ok {
 		return recordingsession.Filter{}, fmt.Errorf("filter %q on %q has no string path setting to snapshot", filter, source)
 	}
-	return recordingsession.Filter{Kind: r.FilterKind, Enabled: r.FilterEnabled, Path: path}, nil
+	format, _ := r.FilterSettings["rec_format"].(string)
+	mode, _ := r.FilterSettings["record_mode"].(float64)
+	if mode != 3 {
+		return recordingsession.Filter{}, fmt.Errorf("filter %q on %q must follow main recording (record_mode=3)", filter, source)
+	}
+	return recordingsession.Filter{Kind: r.FilterKind, Enabled: r.FilterEnabled, Path: path, Format: format, Mode: 3}, nil
 }
 
 func (o RecordingSessionOBS) SetRecordDirectory(path string) error {

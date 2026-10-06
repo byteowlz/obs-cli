@@ -28,14 +28,17 @@ type fakeOBS struct {
 	ignoreSet                  string
 	onCall                     func(string, int)
 	starts                     int
+	noActivate                 bool
+	settings                   RecordingSettings
 }
 
 func newFake() *fakeOBS {
 	return &fakeOBS{
 		collection: "MultiTrack", profile: "MultiTrack", scene: "Composite", directory: "/old/program", filterName: "Source Record",
+		settings: RecordingSettings{Format: "mkv", Filename: "program"},
 		filters: map[string]Filter{
-			"Desktop":  {Kind: sourceRecordKind, Enabled: true, Path: "/old/desktop"},
-			"Cam Link": {Kind: sourceRecordKind, Enabled: true, Path: "/old/cam"},
+			"Desktop":  {Kind: sourceRecordKind, Enabled: true, Path: "/old/desktop", Format: "mkv", Mode: 3},
+			"Cam Link": {Kind: sourceRecordKind, Enabled: true, Path: "/old/cam", Format: "mkv", Mode: 3},
 		},
 		calls: map[string]int{}, failOn: map[string]int{},
 	}
@@ -77,6 +80,10 @@ func (f *fakeOBS) RecordDirectory() (string, error) {
 	err := f.call("directory")
 	return f.directory, err
 }
+func (f *fakeOBS) RecordingSettings() (RecordingSettings, error) {
+	err := f.call("settings")
+	return f.settings, err
+}
 func (f *fakeOBS) SourceFilter(source, name string) (Filter, error) {
 	if name != f.filterName {
 		return Filter{}, errors.New("unexpected filter binding")
@@ -109,6 +116,9 @@ func (f *fakeOBS) SetFilterPath(source, name, path string) error {
 }
 func (f *fakeOBS) StartRecord() error {
 	f.starts++
+	if !f.noActivate {
+		f.recording = true
+	}
 	return f.call("start")
 }
 
@@ -139,6 +149,39 @@ func assertNoWrites(t *testing.T, f *fakeOBS, base string) {
 	}
 }
 
+// OBS acknowledges StartRecord before encoder initialization completes. The fake
+// exposes inactivity until 150ms after acknowledgement, without a racing goroutine.
+func TestStartWaitsForActivationAndRejectsImmediateSecondCall(t *testing.T) {
+	c, f := testConfig(t), newFake()
+	var activeAt time.Time
+	f.onCall = func(op string, _ int) {
+		if op == "start" {
+			activeAt = time.Now().Add(150 * time.Millisecond)
+		}
+		if op == "record" && !activeAt.IsZero() {
+			f.recording = !time.Now().Before(activeAt)
+		}
+	}
+	path, err := Start(f, c, "async", testTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !f.recording {
+		t.Fatal("Start reported success before OBS recording became active")
+	}
+	before := len(f.log)
+	if _, err := Start(f, c, "async", testTime); err == nil || !strings.Contains(err.Error(), "recording is active") {
+		t.Fatalf("immediate second call must reject active recording: %v", err)
+	}
+	if f.starts != 1 || f.directory != path || len(f.log) != before+1 {
+		t.Fatalf("second call changed session paths or started again: %v", f.log)
+	}
+	entries, err := os.ReadDir(c.BaseDirectory)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("second call reserved another directory: %v, %v", entries, err)
+	}
+}
+
 func TestStartOrdering(t *testing.T) {
 	c, f := testConfig(t), newFake()
 	want := filepath.Join(c.BaseDirectory, "2026-01-02_Take one")
@@ -152,9 +195,9 @@ func TestStartOrdering(t *testing.T) {
 		t.Fatalf("Start = %q, %v; want %q", got, err, want)
 	}
 	wantLog := []string{
-		"record", "stream", "collection", "profile", "scene", "directory", "filter:Desktop", "filter:Cam Link",
+		"record", "stream", "collection", "profile", "scene", "settings", "directory", "filter:Desktop", "filter:Cam Link",
 		"set:program", "set:Desktop", "set:Cam Link",
-		"directory", "filter:Desktop", "filter:Cam Link", "record", "stream", "collection", "profile", "scene", "start",
+		"directory", "filter:Desktop", "filter:Cam Link", "record", "stream", "collection", "profile", "scene", "settings", "start", "record",
 	}
 	if !reflect.DeepEqual(f.log, wantLog) || f.starts != 1 {
 		t.Fatalf("unexpected ordering: %v", f.log)
@@ -183,6 +226,8 @@ func TestPreflightRejectsWithoutMutation(t *testing.T) {
 		"wrong collection":    func(f *fakeOBS) { f.collection = "Other" },
 		"wrong profile":       func(f *fakeOBS) { f.profile = "Other" },
 		"wrong program scene": func(f *fakeOBS) { f.scene = "Other" },
+		"wrong main format":   func(f *fakeOBS) { f.settings.Format = "mp4" },
+		"wrong main filename": func(f *fakeOBS) { f.settings.Filename = "other" },
 	}
 	for _, source := range []string{"Desktop", "Cam Link"} {
 		cases["missing "+source] = func(f *fakeOBS) { delete(f.filters, source) }
@@ -191,13 +236,23 @@ func TestPreflightRejectsWithoutMutation(t *testing.T) {
 			filter.Kind = "color_filter"
 			f.filters[source] = filter
 		}
+		cases["wrong mode "+source] = func(f *fakeOBS) {
+			filter := f.filters[source]
+			filter.Mode = 1
+			f.filters[source] = filter
+		}
+		cases["wrong format "+source] = func(f *fakeOBS) {
+			filter := f.filters[source]
+			filter.Format = "mp4"
+			f.filters[source] = filter
+		}
 		cases["disabled "+source] = func(f *fakeOBS) {
 			filter := f.filters[source]
 			filter.Enabled = false
 			f.filters[source] = filter
 		}
 	}
-	for _, op := range []string{"record", "stream", "collection", "profile", "scene", "directory", "filter:Desktop", "filter:Cam Link"} {
+	for _, op := range []string{"record", "stream", "collection", "profile", "scene", "settings", "directory", "filter:Desktop", "filter:Cam Link"} {
 		cases["read error "+op] = func(f *fakeOBS) { f.failOn[op] = 1 }
 	}
 	for name, setup := range cases {
@@ -244,7 +299,7 @@ func TestPathFailuresRollbackAttemptedWrites(t *testing.T) {
 
 func TestVerificationFailuresNeverStart(t *testing.T) {
 	cases := map[string]func(*fakeOBS){}
-	for _, op := range []string{"directory", "filter:Desktop", "filter:Cam Link", "record", "stream", "collection", "profile", "scene"} {
+	for _, op := range []string{"directory", "filter:Desktop", "filter:Cam Link", "record", "stream", "collection", "profile", "scene", "settings"} {
 		cases["second read fails "+op] = func(f *fakeOBS) { f.failOn[op] = 2 }
 	}
 	for _, op := range []string{"set:program", "set:Desktop", "set:Cam Link"} {
@@ -279,26 +334,53 @@ func TestVerificationFailuresNeverStart(t *testing.T) {
 	}
 }
 
-func TestStartFailureRestoresPathsButKeepsReservation(t *testing.T) {
-	c, f := testConfig(t), newFake()
-	f.failOn["start"] = 1
-	if _, err := Start(f, c, "demo", testTime); err == nil {
-		t.Fatal("expected start failure")
-	}
-	assertRestored(t, f)
-	path, err := Start(f, c, "demo", testTime)
-	if err != nil || filepath.Base(path) != "2026-01-02_demo_2" {
-		t.Fatalf("failed session directory reused: %q, %v", path, err)
+func TestStartUncertainOutcomeRetainsPathsAndReservation(t *testing.T) {
+	for _, failure := range []string{"request error", "request timeout", "poll error", "activation timeout"} {
+		t.Run(failure, func(t *testing.T) {
+			c, f := testConfig(t), newFake()
+			switch failure {
+			case "request error", "request timeout":
+				f.failOn["start"] = 1
+				// Even an error reply/timeout may leave OBS starting recording.
+				f.onCall = func(op string, _ int) {
+					if op == "start" {
+						f.recording = true
+					}
+				}
+			case "poll error":
+				f.failOn["record"] = 3 // Two readiness checks precede StartRecord.
+			case "activation timeout":
+				f.noActivate = true
+			}
+			started := time.Now()
+			_, err := Start(f, c, "uncertain", testTime)
+			if err == nil || !strings.Contains(err.Error(), "recording status") {
+				t.Fatalf("missing check-status guidance: %v", err)
+			}
+			if failure == "activation timeout" && (time.Since(started) < 5*time.Second || time.Since(started) > 6*time.Second) {
+				t.Fatalf("activation wait not bounded to five seconds: %v", time.Since(started))
+			}
+			path := filepath.Join(c.BaseDirectory, "2026-01-02_uncertain")
+			if f.directory != path || f.filters["Desktop"].Path != path || f.filters["Cam Link"].Path != path {
+				t.Fatalf("paths rolled back after start attempt: %q, %+v", f.directory, f.filters)
+			}
+			if info, err := os.Stat(path); err != nil || !info.IsDir() {
+				t.Fatalf("reservation removed: %v", err)
+			}
+			if f.starts != 1 || f.calls["set:program"] != 1 || f.calls["set:Desktop"] != 1 || f.calls["set:Cam Link"] != 1 {
+				t.Fatalf("unexpected post-start writes: %v", f.log)
+			}
+		})
 	}
 }
 
 func TestRollbackContinuesAfterErrors(t *testing.T) {
 	c, f := testConfig(t), newFake()
-	f.failOn["start"] = 1
+	f.failOn["directory"] = 2 // Pre-start verification failure still rolls back.
 	f.failOn["set:Cam Link"] = 2
 	f.failOn["set:Desktop"] = 2
 	_, err := Start(f, c, "demo", testTime)
-	for _, text := range []string{"start recording", "rollback Cam Link filter path", "rollback Desktop filter path"} {
+	for _, text := range []string{"verify program directory", "rollback Cam Link filter path", "rollback Desktop filter path"} {
 		if err == nil || !strings.Contains(err.Error(), text) {
 			t.Fatalf("missing failure %q: %v", text, err)
 		}

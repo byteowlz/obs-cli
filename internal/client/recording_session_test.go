@@ -16,9 +16,15 @@ import (
 
 // This server implements only the session requests on an ephemeral loopback
 // port. It never contacts a running OBS instance or uses user's config.
-func testSessionServer(t *testing.T, initialPath any) (RecordingSessionOBS, <-chan map[string]any) {
+func testSessionServer(t *testing.T, initialPath any, overrides ...map[string]string) (RecordingSessionOBS, <-chan map[string]any) {
 	t.Helper()
-	requests := make(chan map[string]any, 40)
+	parameters := map[string]string{"Output.Mode": "Advanced", "Output.FilenameFormatting": "program", "AdvOut.RecFormat2": "mkv", "SimpleOutput.RecFormat2": "mkv"}
+	for _, values := range overrides {
+		for key, value := range values {
+			parameters[key] = value
+		}
+	}
+	requests := make(chan map[string]any, 60)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
 		if err != nil {
@@ -41,6 +47,7 @@ func testSessionServer(t *testing.T, initialPath any) (RecordingSessionOBS, <-ch
 			return
 		}
 		directory := "/old/program"
+		recording := false
 		paths := map[string]any{"Desktop": initialPath, "Cam Link": "/old/cam"}
 		for {
 			var message struct {
@@ -54,8 +61,12 @@ func testSessionServer(t *testing.T, initialPath any) (RecordingSessionOBS, <-ch
 			data, _ := request["requestData"].(map[string]any)
 			response := map[string]any{}
 			switch request["requestType"] {
-			case "GetRecordStatus", "GetStreamStatus":
+			case "GetRecordStatus":
+				response["outputActive"] = recording
+			case "GetStreamStatus":
 				response["outputActive"] = false
+			case "GetProfileParameter":
+				response["parameterValue"] = parameters[data["parameterCategory"].(string)+"."+data["parameterName"].(string)]
 			case "GetSceneCollectionList":
 				response["currentSceneCollectionName"] = "MultiTrack"
 			case "GetProfileList":
@@ -69,7 +80,7 @@ func testSessionServer(t *testing.T, initialPath any) (RecordingSessionOBS, <-ch
 				source, _ := data["sourceName"].(string)
 				response["filterKind"] = "source_record_filter"
 				response["filterEnabled"] = true
-				response["filterSettings"] = map[string]any{"path": paths[source], "filename_formatting": "keep", "record_mode": 3}
+				response["filterSettings"] = map[string]any{"path": paths[source], "filename_formatting": "keep", "record_mode": 3, "rec_format": "mkv"}
 			case "SetRecordDirectory":
 				directory, _ = data["recordDirectory"].(string)
 			case "SetSourceFilterSettings":
@@ -77,6 +88,7 @@ func testSessionServer(t *testing.T, initialPath any) (RecordingSessionOBS, <-ch
 				settings, _ := data["filterSettings"].(map[string]any)
 				paths[source] = settings["path"]
 			case "StartRecord":
+				recording = true
 			default:
 				t.Errorf("unexpected OBS request: %v", request)
 			}
@@ -132,6 +144,39 @@ func TestRecordingSessionAdapterOverlaysOnlyPaths(t *testing.T) {
 	}
 	if sets != 2 || starts != 1 {
 		t.Fatalf("filter sets=%d, starts=%d", sets, starts)
+	}
+}
+
+func TestRecordingSettingsModes(t *testing.T) {
+	for _, mode := range []string{"Simple", "Advanced", "invalid"} {
+		t.Run(mode, func(t *testing.T) {
+			obs, requests := testSessionServer(t, "/old/desktop", map[string]string{"Output.Mode": mode})
+			settings, err := obs.RecordingSettings()
+			if mode == "invalid" {
+				if err == nil {
+					t.Fatal("unsupported output mode accepted")
+				}
+				return
+			}
+			if err != nil || settings.Format != "mkv" || settings.Filename != "program" {
+				t.Fatalf("settings: %+v, %v", settings, err)
+			}
+			if err := obs.Client.Disconnect(); err != nil {
+				t.Fatal(err)
+			}
+			for request := range requests {
+				data := request["requestData"].(map[string]any)
+				if data["parameterName"] == "RecFormat2" {
+					want := "AdvOut"
+					if mode == "Simple" {
+						want = "SimpleOutput"
+					}
+					if data["parameterCategory"] != want {
+						t.Fatalf("wrong recording category: %+v", data)
+					}
+				}
+			}
+		})
 	}
 }
 

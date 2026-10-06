@@ -59,7 +59,7 @@ func TestRecordingSessionRegistrationAndHelp(t *testing.T) {
 	if err := cmd.Help(); err != nil {
 		t.Fatal(err)
 	}
-	for _, text := range []string{"session [name]", "~/Movies", "TTY", "pause does not synchronize", "--config"} {
+	for _, text := range []string{"session [name]", "~/Movies", "TTY", "pause propagation is not verified", "--config"} {
 		if !strings.Contains(help.String(), text) {
 			t.Fatalf("help missing %q: %s", text, help.String())
 		}

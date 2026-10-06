@@ -20,6 +20,14 @@ type Filter struct {
 	Kind    string
 	Enabled bool
 	Path    string
+	Format  string
+	Mode    int
+}
+
+// RecordingSettings contains the main-output settings required by this workflow.
+type RecordingSettings struct {
+	Format   string
+	Filename string
 }
 
 // OBS is the narrow, fakeable boundary for the session workflow. No methods can
@@ -31,6 +39,7 @@ type OBS interface {
 	Profile() (string, error)
 	Scene() (string, error)
 	RecordDirectory() (string, error)
+	RecordingSettings() (RecordingSettings, error)
 	SourceFilter(source, filter string) (Filter, error)
 	SetRecordDirectory(path string) error
 	SetFilterPath(source, filter, path string) error
@@ -92,6 +101,13 @@ func checkReady(obs OBS, c config.RecordingSessionConfig) error {
 			return fmt.Errorf("refusing session: %s is %q; expected %q (select it in OBS first)", binding.name, got, binding.want)
 		}
 	}
+	settings, err := obs.RecordingSettings()
+	if err != nil {
+		return fmt.Errorf("get main recording settings: %w", err)
+	}
+	if settings.Format != "mkv" || settings.Filename != "program" {
+		return errors.New("main recording must use MKV with filename formatting program (configure the OBS profile first)")
+	}
 	return nil
 }
 
@@ -102,6 +118,9 @@ func readFilter(obs OBS, source, name string) (Filter, error) {
 	}
 	if filter.Kind != sourceRecordKind || !filter.Enabled {
 		return Filter{}, fmt.Errorf("source %q needs enabled filter %q of kind %s (got %q, enabled=%t)", source, name, sourceRecordKind, filter.Kind, filter.Enabled)
+	}
+	if filter.Format != "mkv" || filter.Mode != 3 {
+		return Filter{}, fmt.Errorf("source %q filter must use MKV and record_mode=3 (follow main recording)", source)
 	}
 	return filter, nil
 }
@@ -166,6 +185,32 @@ func verifyPaths(obs OBS, c config.RecordingSessionConfig, directory string) err
 	return nil
 }
 
+// waitForActivation separates an accepted RPC from an established recording.
+func waitForActivation(obs OBS) error {
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	ticks := time.NewTicker(100 * time.Millisecond)
+	defer ticks.Stop()
+	for {
+		active, err := obs.RecordActive()
+		if err != nil {
+			return fmt.Errorf("confirm recording activation: %w", err)
+		}
+		if active {
+			return nil
+		}
+		select {
+		case <-deadline.C:
+			return errors.New("recording did not become active within five seconds")
+		case <-ticks.C:
+		}
+	}
+}
+
+func uncertainStart(directory string, cause error) error {
+	return fmt.Errorf("session directory %q retained; %w; start outcome is uncertain, check recording status before retrying (output paths were not rolled back)", directory, cause)
+}
+
 // Start validates all bindings and snapshots all paths before any mutation. A
 // failed/ambiguous write is included in rollback, since OBS may have applied it.
 // Reserved directories are kept even on failure: uncertain remote outcomes must
@@ -216,7 +261,10 @@ func Start(obs OBS, c config.RecordingSessionConfig, name string, now time.Time)
 		return fail(err, changes)
 	}
 	if err := obs.StartRecord(); err != nil {
-		return fail(fmt.Errorf("start recording: %w (check recording status before retrying)", err), changes)
+		return "", uncertainStart(directory, fmt.Errorf("start recording: %w", err))
+	}
+	if err := waitForActivation(obs); err != nil {
+		return "", uncertainStart(directory, err)
 	}
 	return directory, nil
 }
