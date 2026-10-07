@@ -17,11 +17,13 @@ const sourceRecordKind = "source_record_filter"
 
 // Filter contains only the settings this workflow inspects or changes.
 type Filter struct {
-	Kind    string
-	Enabled bool
-	Path    string
-	Format  string
-	Mode    int
+	Kind           string
+	Enabled        bool
+	Path           string
+	Format         string
+	Mode           int
+	DifferentAudio bool
+	AudioTrack     int
 }
 
 // RecordingSettings contains the main-output settings required by this workflow.
@@ -211,6 +213,29 @@ func uncertainStart(directory string, cause error) error {
 	return fmt.Errorf("session directory %q retained; %w; start outcome is uncertain, check recording status before retrying (output paths were not rolled back)", directory, cause)
 }
 
+func snapshotOutputPaths(obs OBS, c config.RecordingSessionConfig, diagnostic func(string, Filter) error) ([]pathChange, error) {
+	oldDirectory, err := obs.RecordDirectory()
+	if err != nil {
+		return nil, fmt.Errorf("get program directory: %w", err)
+	}
+	changes := []pathChange{{"program directory", obs.SetRecordDirectory, oldDirectory}}
+	for _, source := range c.SourceNames {
+		filter, err := readFilter(obs, source, c.FilterName)
+		if err != nil {
+			return nil, err
+		}
+		if diagnostic != nil {
+			if err := diagnostic(source, filter); err != nil {
+				return nil, fmt.Errorf("audio diagnostics on %q: %w", source, err)
+			}
+		}
+		changes = append(changes, pathChange{source + " filter path", func(path string) error {
+			return obs.SetFilterPath(source, c.FilterName, path)
+		}, filter.Path})
+	}
+	return changes, nil
+}
+
 // Start validates all bindings and snapshots all paths before any mutation. A
 // failed/ambiguous write is included in rollback, since OBS may have applied it.
 // Reserved directories are kept even on failure: uncertain remote outcomes must
@@ -235,19 +260,9 @@ func StartWithOptions(obs OBS, c config.RecordingSessionConfig, name string, now
 	if err := checkReady(obs, c); err != nil {
 		return "", err
 	}
-	oldDirectory, err := obs.RecordDirectory()
+	changes, err := snapshotOutputPaths(obs, c, opts.AudioDiagnostic)
 	if err != nil {
-		return "", fmt.Errorf("get program directory: %w", err)
-	}
-	changes := []pathChange{{"program directory", obs.SetRecordDirectory, oldDirectory}}
-	for _, source := range c.SourceNames {
-		filter, err := readFilter(obs, source, c.FilterName)
-		if err != nil {
-			return "", err
-		}
-		changes = append(changes, pathChange{source + " filter path", func(path string) error {
-			return obs.SetFilterPath(source, c.FilterName, path)
-		}, filter.Path})
+		return "", err
 	}
 	if err := prepareComposition(obs, c, opts, mode); err != nil {
 		return "", fmt.Errorf("prepare composition (selection/layout may be retained; recording not started): %w", err)

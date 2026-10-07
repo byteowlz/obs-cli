@@ -113,7 +113,9 @@ func (o RecordingSessionOBS) SourceFilter(source, filter string) (recordingsessi
 	if mode != 3 {
 		return recordingsession.Filter{}, fmt.Errorf("filter %q on %q must follow main recording (record_mode=3)", filter, source)
 	}
-	return recordingsession.Filter{Kind: r.FilterKind, Enabled: r.FilterEnabled, Path: path, Format: format, Mode: 3}, nil
+	differentAudio, _ := r.FilterSettings["different_audio"].(bool)
+	audioTrack, _ := r.FilterSettings["audio_track"].(float64)
+	return recordingsession.Filter{Kind: r.FilterKind, Enabled: r.FilterEnabled, Path: path, Format: format, Mode: 3, DifferentAudio: differentAudio, AudioTrack: int(audioTrack)}, nil
 }
 
 func (o RecordingSessionOBS) SetRecordDirectory(path string) error {

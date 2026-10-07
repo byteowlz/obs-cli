@@ -73,7 +73,11 @@ Use recording stop/status as usual; pause propagation is not verified here.`,
 			if err != nil {
 				return err
 			}
-			directory, err := recordingsession.StartWithOptions(client.RecordingSessionOBS{Client: client.Client}, recordingSessionConfig, name, time.Now(), opts)
+			obs := client.RecordingSessionOBS{Client: client.Client}
+			opts.AudioDiagnostic = func(source string, filter recordingsession.Filter) error {
+				return warnCustomSourceAudio(source, filter, cmd.ErrOrStderr())
+			}
+			directory, err := recordingsession.StartWithOptions(obs, recordingSessionConfig, name, time.Now(), opts)
 			if err != nil {
 				return err
 			}

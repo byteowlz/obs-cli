@@ -36,6 +36,7 @@ archives:
       - CHANGELOG.md
       - VERSION
       - examples/config.schema.json
+      - docs/audio-routing.md
       - integrations/macos/**
 checksum:
   name_template: checksums.txt

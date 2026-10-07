@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- Warn when Source Record uses its custom audio-copy path, which can introduce crackling.
+- Document verified global-mix routing for separate desktop/microphone audio and recovery from clean program stems. Audio settings remain user-owned and are not rewritten by the CLI.
+
 ## 0.1.0
 
 First tagged byteowlz release of the obs-cli fork.

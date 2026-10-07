@@ -12,7 +12,11 @@ import (
 
 // Options are invocation-only overrides. An empty Composition uses config.
 // ScreenUUID is optional; absent selection preserves Desktop Properties choice.
-type Options struct{ ScreenUUID, Composition string }
+type Options struct {
+	ScreenUUID, Composition string
+	// Optional diagnostics run on validated filter snapshots, before any mutation.
+	AudioDiagnostic func(source string, filter Filter) error
+}
 
 // DesktopInput describes only the macOS selection settings we inspect.
 type DesktopInput struct {

@@ -65,6 +65,8 @@ func testSessionServerWithFault(t *testing.T, initialPath any, fault *sessionSer
 		for source, path := range paths {
 			fullSettings[source] = map[string]any{"path": path, "filename_formatting": "keep", "record_mode": 3, "rec_format": "mkv", "encoder": "obs_x264", "audio_encoder": "ffmpeg_aac", "x264opts": map[string]any{"crf": 20, "preset": "veryfast", "tune": "zerolatency"}, "width": 0, "height": 0}
 		}
+		fullSettings["Desktop"]["different_audio"], fullSettings["Desktop"]["audio_track"] = true, 2
+		fullSettings["Cam Link"]["different_audio"], fullSettings["Cam Link"]["audio_track"] = true, 3
 		displayUUID := "00000000-0000-0000-0000-000000000002"
 		video := map[string]any{"baseWidth": 1920, "baseHeight": 1080, "outputWidth": 1920, "outputHeight": 1080, "fpsNumerator": 60, "fpsDenominator": 1}
 		for {
@@ -225,6 +227,16 @@ func TestRecordingSessionAdapterOverlaysOnlyPaths(t *testing.T) {
 	}
 	if sets != 2 || starts != 1 {
 		t.Fatalf("filter sets=%d, starts=%d", sets, starts)
+	}
+}
+
+func TestRecordingSessionAudioMetadata(t *testing.T) {
+	obs, _ := testSessionServer(t, "/old/desktop")
+	for source, track := range map[string]int{"Desktop": 2, "Cam Link": 3} {
+		filter, err := obs.SourceFilter(source, "Source Record")
+		if err != nil || !filter.DifferentAudio || filter.AudioTrack != track {
+			t.Fatalf("audio-route metadata lost for %s: %+v, %v", source, filter, err)
+		}
 	}
 }
 

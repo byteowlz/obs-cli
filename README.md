@@ -117,6 +117,10 @@ already have:
   The CLI validates format and recording mode plus the main filename template;
   it changes none of these settings. Encoder compatibility and actual isolated
   outputs still need testing.
+- For clean isolated audio, route Desktop through global OBS audio track 2 and
+  microphone through track 3, with Source Record **Different Audio** enabled.
+  Do not use its custom per-source copy path. See [audio routing and recovery](docs/audio-routing.md).
+  The CLI warns about custom routes but leaves your audio settings unchanged.
 
 Active recording (including paused recording), active streaming, mismatched
 bindings, missing/disabled/wrong filters and unreadable paths are rejected before
